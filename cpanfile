@@ -7,5 +7,7 @@ requires "Time::Piece";
 
 requires "DBD::mysql";
 requires "Starman";
+requires "Starlet";
+requires "Server::Starter";
 requires "Plack::Session";
 requires "Data::Dumper";
