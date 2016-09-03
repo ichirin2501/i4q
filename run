@@ -3,5 +3,5 @@
 cd $(dirname $0)
 
 exec carton exec -- \
-  server_starter --port 8080 -- \
+  start_server --port 8080 -- \
     plackup -s Starlet -E prod -a ./app.psgi
