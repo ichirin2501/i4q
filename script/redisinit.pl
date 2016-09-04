@@ -19,7 +19,7 @@ for my $line (<>) {
     if ($succeeded) {
         $redis->hset($bankey, $ip, 0, sub {});
     } else {
-        $redis->hincr($bankey, $ip, sub {});
+        $redis->hincrby($bankey, $ip, 1, sub {});
     }
 
     # loginの成功記録

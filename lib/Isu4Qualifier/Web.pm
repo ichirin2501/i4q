@@ -65,11 +65,8 @@ sub user_locked {
 
 sub ip_banned {
   my ($self, $ip) = @_;
-  my $log = $self->db->select_row(
-    'SELECT COUNT(1) AS failures FROM login_log WHERE ip = ? AND id > IFNULL((select id from login_log where ip = ? AND succeeded = 1 ORDER BY id DESC LIMIT 1), 0)',
-    $ip, $ip);
-
-  $self->config->{ip_ban_threshold} <= $log->{failures};
+  my $cnt = $self->redis->hget("login:ip:succfail", $ip) || 0;
+  return $self->config->{ip_ban_threshold} <= $cnt;
 };
 
 sub attempt_login {
@@ -121,22 +118,13 @@ sub banned_ips {
   my @ips;
   my $threshold = $self->config->{ip_ban_threshold};
 
-  my $not_succeeded = $self->db->select_all('SELECT ip FROM (SELECT ip, MAX(succeeded) as max_succeeded, COUNT(1) as cnt FROM login_log GROUP BY ip) AS t0 WHERE t0.max_succeeded = 0 AND t0.cnt >= ?', $threshold);
-
-  foreach my $row (@$not_succeeded) {
-    push @ips, $row->{ip};
+  my %data = $self->redis->hgetall("login:ip:succfail");
+  while (my ($ip, $cnt) = each %data) {
+      if ($threshold <= $cnt) {
+          push @ips, $ip;
+      }
   }
-
-  my $last_succeeds = $self->db->select_all('SELECT ip, MAX(id) AS last_login_id FROM login_log WHERE succeeded = 1 GROUP by ip');
-
-  foreach my $row (@$last_succeeds) {
-    my $count = $self->db->select_one('SELECT COUNT(1) AS cnt FROM login_log WHERE ip = ? AND ? < id', $row->{ip}, $row->{last_login_id});
-    if ($threshold <= $count) {
-      push @ips, $row->{ip};
-    }
-  }
-
-  \@ips;
+  return \@ips;
 };
 
 sub locked_users {
@@ -168,6 +156,27 @@ sub login_log {
     'INSERT INTO login_log (`created_at`, `user_id`, `login`, `ip`, `succeeded`) VALUES (NOW(),?,?,?,?)',
     $user_id, $login, $ip, ($succeeded ? 1 : 0)
   );
+
+  # ログインの成否更新
+  if ($succeeded) {
+      $self->redis->hset("login:ip:succfail", $ip, 0);
+  } else {
+      $self->redis->hincrby("login:ip:succfail", $ip);
+  }
+
+
+  # loginの成功記録
+  #if ($succeeded) {
+  #  my $slk = sprintf "login:user_id:%d", $user_id;
+  #  $self->redis->lpush($slk, $self->json_driver->encode({
+  #    id => $id,
+  #    created_at => $created_at,
+  #    user_id => $user_id,
+  #    login => $login,
+  #    ip => $ip,
+  #    succeeded => $succeeded,
+  #  }));
+  #}
 };
 
 sub set_flash {
