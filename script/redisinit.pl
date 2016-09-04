@@ -15,11 +15,19 @@ for my $line (<>) {
     my ($id,$created_at,$user_id,$login,$ip,$succeeded) = split/\t/, $line;
 
     # loginのipの連続失敗記録, hash型
-    my $bankey = sprintf "login:ip:succfail", $ip;
+    my $bankey = "login:ip:succfail";
     if ($succeeded) {
         $redis->hset($bankey, $ip, 0, sub {});
     } else {
         $redis->hincrby($bankey, $ip, 1, sub {});
+    }
+
+    # loginのuser_idの連続失敗記録, hash型
+    my $luk = "login:user_id:succfail";
+    if ($succeeded) {
+        $redis->hget($luk, $user_id, 0, sub {});
+    } else {
+        $redis->hincrby($luk, $user_id, 1, sub {});
     }
 
     # loginの成功記録

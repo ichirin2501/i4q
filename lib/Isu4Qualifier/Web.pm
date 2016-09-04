@@ -157,26 +157,33 @@ sub login_log {
     $user_id, $login, $ip, ($succeeded ? 1 : 0)
   );
 
-  # ログインの成否更新
+  # ログインのip成否更新
   if ($succeeded) {
       $self->redis->hset("login:ip:succfail", $ip, 0);
   } else {
-      $self->redis->hincrby("login:ip:succfail", $ip);
+      $self->redis->hincrby("login:ip:succfail", $ip, 1);
+  }
+
+  # ログインのuser_id成否更新
+  if ($succeeded) {
+      $self->redis->hset("login:user_id:succfail", $user_id, 0);
+  } else {
+      $self->redis->hincrby("login:user_id:succfail", $user_id, 1);
   }
 
 
   # loginの成功記録
-  #if ($succeeded) {
-  #  my $slk = sprintf "login:user_id:%d", $user_id;
-  #  $self->redis->lpush($slk, $self->json_driver->encode({
-  #    id => $id,
-  #    created_at => $created_at,
-  #    user_id => $user_id,
-  #    login => $login,
-  #    ip => $ip,
-  #    succeeded => $succeeded,
-  #  }));
-  #}
+  if ($succeeded) {
+    my $slk = sprintf "login:user_id:%d", $user_id;
+    $self->redis->lpush($slk, $self->json_driver->encode({
+      id => $id,
+      created_at => $created_at,
+      user_id => $user_id,
+      login => $login,
+      ip => $ip,
+      succeeded => $succeeded,
+    }));
+  }
 };
 
 sub set_flash {
