@@ -13,3 +13,7 @@ CREATE TABLE IF NOT EXISTS `login_log` (
   `ip` varchar(255) NOT NULL,
   `succeeded` tinyint NOT NULL
 ) DEFAULT CHARSET=utf8;
+
+
+ALTER TABLE login_log ADD INDEX `idx_user_id_succeeded` (`user_id`, `succeeded`);
+ALTER TABLE login_log ADD INDEX `idx_ip_succeeded` (`ip`, `succeeded`);
