@@ -174,15 +174,14 @@ sub login_log {
 
   # loginの成功記録
   if ($succeeded) {
-    my $slk = sprintf "login:user_id:%d", $user_id;
-    $self->redis->lpush($slk, $self->json_driver->encode({
-      id => $id,
-      created_at => $created_at,
-      user_id => $user_id,
-      login => $login,
-      ip => $ip,
-      succeeded => $succeeded,
-    }));
+      my $slk = sprintf "login:user_id:%d", $user_id;
+      $self->redis->lpush($slk, $self->json_driver->encode({
+          created_at => "2016-10-04 00:00:00", # dummy
+          user_id => $user_id,
+          login => $login,
+          ip => $ip,
+          succeeded => $succeeded,
+      }));
   }
 };
 

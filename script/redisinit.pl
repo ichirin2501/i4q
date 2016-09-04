@@ -34,8 +34,7 @@ for my $line (<>) {
     my $slk = sprintf "login:user_id:%d", $user_id;
     if ($succeeded) {
         $redis->lpush($slk, $jd->encode({
-            id => $id,
-            created_at => $created_at,
+            created_at => "2016-10-03 00:00:00", # dummy
             user_id => $user_id,
             login => $login,
             ip => $ip,
