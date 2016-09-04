@@ -8,6 +8,7 @@ use DBIx::Sunny;
 use Digest::SHA qw/ sha256_hex /;
 use Data::Dumper;
 use Redis::Fast;
+use JSON::XS;
 
 sub config {
   my ($self) = @_;
@@ -16,6 +17,11 @@ sub config {
     ip_ban_threshold => $ENV{'ISU4_IP_BAN_THRESHOLD'} || 10
   };
 };
+
+sub json_driver {
+    my ($self) = @_;
+    $self->{_json_driver} ||= JSON::XS->new;
+}
 
 sub redis {
     my ($self) = @_;
