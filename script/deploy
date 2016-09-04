@@ -4,4 +4,4 @@ set -ex
 IPADDR=$1
 USERNAME=$USER
 
-ssh -t isucon@$IPADDR "cd /home/isucon/webapp/perl && git pull && ./env.sh carton install && sudo ./script/logrotate.sh && redis-cli flushdb && sudo service redis restart && sudo service mysqld restart && sudo service nginx restart && sudo service supervisord reload"
+ssh -t isucon@$IPADDR "cd /home/isucon/webapp/perl && git pull && ./env.sh carton install && sudo ./script/logrotate.sh && redis-cli flushdb && sudo service memcached restart && sudo service redis restart && sudo service mysqld restart && sudo service nginx restart && sudo service supervisord reload"

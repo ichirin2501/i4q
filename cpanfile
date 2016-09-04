@@ -13,3 +13,5 @@ requires "Plack::Session";
 requires "Data::Dumper";
 requires "Redis::Fast";
 requires "DDP";
+requires "Plack::Middleware::Session::Simple";
+requires "Cache::Memcached::Fast";
