@@ -121,7 +121,7 @@ sub banned_ips {
           push @ips, $ip;
       }
   }
-  return \@ips;
+  return [ sort @ips ];
 };
 
 sub locked_users {
@@ -140,7 +140,7 @@ sub locked_users {
   for my $r (@$lus) {
       push @user_ids, $r->{login};
   }
-  return \@user_ids;
+  return [ sort @user_ids ];
 };
 
 sub login_log {

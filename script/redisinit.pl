@@ -26,7 +26,7 @@ for my $line (<>) {
     my $luk = "login:user_id:succfail";
     if ($user_id) {
         if ($succeeded) {
-            $redis->hget($luk, $user_id, 0, sub {});
+            $redis->hset($luk, $user_id, 0, sub {});
         } else {
             $redis->hincrby($luk, $user_id, 1, sub {});
         }
