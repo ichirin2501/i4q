@@ -56,11 +56,8 @@ sub calculate_password_hash {
 
 sub user_locked {
   my ($self, $user) = @_;
-  my $log = $self->db->select_row(
-    'SELECT COUNT(1) AS failures FROM login_log WHERE user_id = ? AND id > IFNULL((select id from login_log where user_id = ? AND succeeded = 1 ORDER BY id DESC LIMIT 1), 0)',
-    $user->{'id'}, $user->{'id'});
-
-  $self->config->{user_lock_threshold} <= $log->{failures};
+  my $cnt = $self->redis->hget("login:user_id:succfail", $user->{id}) || 0;
+  return $self->config->{user_lock_threshold} <= $cnt;
 };
 
 sub ip_banned {
@@ -132,22 +129,18 @@ sub locked_users {
   my @user_ids;
   my $threshold = $self->config->{user_lock_threshold};
 
-  my $not_succeeded = $self->db->select_all('SELECT user_id, login FROM (SELECT user_id, login, MAX(succeeded) as max_succeeded, COUNT(1) as cnt FROM login_log GROUP BY user_id) AS t0 WHERE t0.user_id IS NOT NULL AND t0.max_succeeded = 0 AND t0.cnt >= ?', $threshold);
-
-  foreach my $row (@$not_succeeded) {
-    push @user_ids, $row->{login};
+  my @tmp_user_id;
+  my %data = $self->redis->hgetall("login:user_id:succfail");
+  while (my ($user_id, $cnt) = each %data) {
+      if ($threshold <= $cnt) {
+          push @tmp_user_id, $user_id;
+      }
   }
-
-  my $last_succeeds = $self->db->select_all('SELECT user_id, login, MAX(id) AS last_login_id FROM login_log WHERE user_id IS NOT NULL AND succeeded = 1 GROUP BY user_id');
-
-  foreach my $row (@$last_succeeds) {
-    my $count = $self->db->select_one('SELECT COUNT(1) AS cnt FROM login_log WHERE user_id = ? AND ? < id', $row->{user_id}, $row->{last_login_id});
-    if ($threshold <= $count) {
-      push @user_ids, $row->{login};
-    }
+  my $lus = $self->db->select_all('SELECT login FROM users WHERE id IN(' . join(',', @tmp_user_id) . ')');
+  for my $r (@$lus) {
+      push @user_ids, $r->{login};
   }
-
-  \@user_ids;
+  return \@user_ids;
 };
 
 sub login_log {
@@ -165,15 +158,16 @@ sub login_log {
   }
 
   # ログインのuser_id成否更新
-  if ($succeeded) {
-      $self->redis->hset("login:user_id:succfail", $user_id, 0);
-  } else {
-      $self->redis->hincrby("login:user_id:succfail", $user_id, 1);
+  if ($user_id) {
+      if ($succeeded) {
+          $self->redis->hset("login:user_id:succfail", $user_id, 0);
+      } else {
+        $self->redis->hincrby("login:user_id:succfail", $user_id, 1);
+      }
   }
 
-
   # loginの成功記録
-  if ($succeeded) {
+  if ($succeeded && $user_id) {
       my $slk = sprintf "login:user_id:%d", $user_id;
       $self->redis->lpush($slk, $self->json_driver->encode({
           created_at => "2016-10-04 00:00:00", # dummy
