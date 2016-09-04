@@ -7,6 +7,7 @@ use Kossy;
 use DBIx::Sunny;
 use Digest::SHA qw/ sha256_hex /;
 use Data::Dumper;
+use Redis::Fast;
 
 sub config {
   my ($self) = @_;
@@ -15,6 +16,11 @@ sub config {
     ip_ban_threshold => $ENV{'ISU4_IP_BAN_THRESHOLD'} || 10
   };
 };
+
+sub redis {
+    my ($self) = @_;
+    $self->{_redis} ||= Redis::Fast->new;
+}
 
 sub db {
   my ($self) = @_;
