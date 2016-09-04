@@ -8,15 +8,15 @@ use Plack::Session::State::Cookie;
 use Plack::Session::Store::File;
 
 my $root_dir = File::Basename::dirname(__FILE__);
-my $session_dir = "/tmp/isu4_session_plack";
+my $session_dir = "/dev/shm/isu4_session_plack";
 mkdir $session_dir;
 
 my $app = Isu4Qualifier::Web->psgi($root_dir);
 builder {
   enable 'ReverseProxy';
-  enable 'Static',
-    path => qr!^/(?:stylesheets|images)/!,
-    root => $root_dir . '/public';
+#  enable 'Static',
+#    path => qr!^/(?:stylesheets|images)/!,
+#    root => $root_dir . '/public';
   enable 'Session',
     state => Plack::Session::State::Cookie->new(
       httponly    => 1,
