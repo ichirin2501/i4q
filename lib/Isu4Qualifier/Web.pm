@@ -217,12 +217,14 @@ post '/login' => sub {
 
 get '/mypage' => [qw(session)] => sub {
   my ($self, $c) = @_;
-  my $user_id = $c->req->env->{'psgix.session'}->{user_id};
-  my $user = $self->current_user($user_id);
+  # loginに成功しないとpsgix.sessionにuser_idが入らない、ので、current_userのチェックは不要
+  my $user_id = $c->req->env->{'psgix.session'}->{user_id} || 0;
+  my $last_login_user = $self->last_login($user_id);
+  #my $user = $self->current_user($user_id);
   my $msg;
 
-  if ($user) {
-    $c->render('mypage.tx', { last_login => $self->last_login($user_id) });
+  if ($last_login_user) {
+    $c->render('mypage.tx', { last_login => $last_login_user });
   }
   else {
     $self->set_flash($c, "You must be logged in");
