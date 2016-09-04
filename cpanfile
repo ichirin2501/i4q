@@ -11,3 +11,5 @@ requires "Starlet";
 requires "Server::Starter";
 requires "Plack::Session";
 requires "Data::Dumper";
+requires "Redis::Fast";
+requires "DDP";
