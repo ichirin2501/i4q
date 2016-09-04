@@ -145,17 +145,17 @@ sub login_log {
   my ($self, $succeeded, $login, $ip, $user_id) = @_;
   # ログインのip成否更新
   if ($succeeded) {
-      $self->redis->hset("login:ip:succfail", $ip, 0);
+      $self->redis->hset("login:ip:succfail", $ip, 0, sub {});
   } else {
-      $self->redis->hincrby("login:ip:succfail", $ip, 1);
+      $self->redis->hincrby("login:ip:succfail", $ip, 1, sub {});
   }
 
   # ログインのuser_id成否更新
   if ($user_id) {
       if ($succeeded) {
-          $self->redis->hset("login:user_id:succfail", $user_id, 0);
+          $self->redis->hset("login:user_id:succfail", $user_id, 0, sub {});
       } else {
-        $self->redis->hincrby("login:user_id:succfail", $user_id, 1);
+        $self->redis->hincrby("login:user_id:succfail", $user_id, 1, sub {});
       }
   }
 
@@ -168,8 +168,10 @@ sub login_log {
           login => $login,
           ip => $ip,
           succeeded => $succeeded,
-      }));
+      }), sub {});
   }
+
+  $self->redis->wait_all_responses;
 };
 
 sub set_flash {
