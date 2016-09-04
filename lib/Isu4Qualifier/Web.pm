@@ -102,12 +102,10 @@ sub current_user {
 
 sub last_login {
   my ($self, $user_id) = @_;
-
-  my $logs = $self->db->select_all(
-   'SELECT * FROM login_log WHERE succeeded = 1 AND user_id = ? ORDER BY id DESC LIMIT 2',
-   $user_id);
-
-  @$logs[-1];
+  my $slk = sprintf "login:user_id:%d", $user_id;
+  my @rows = $self->redis->lrange($slk, 0, 1);
+  my $user = $self->json_driver->decode($rows[-1]);
+  return $user;
 };
 
 sub banned_ips {
@@ -145,11 +143,6 @@ sub locked_users {
 
 sub login_log {
   my ($self, $succeeded, $login, $ip, $user_id) = @_;
-  $self->db->query(
-    'INSERT INTO login_log (`created_at`, `user_id`, `login`, `ip`, `succeeded`) VALUES (NOW(),?,?,?,?)',
-    $user_id, $login, $ip, ($succeeded ? 1 : 0)
-  );
-
   # ログインのip成否更新
   if ($succeeded) {
       $self->redis->hset("login:ip:succfail", $ip, 0);
