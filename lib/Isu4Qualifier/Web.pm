@@ -7,6 +7,8 @@ use Kossy;
 use DBIx::Sunny;
 use Digest::SHA qw/ sha256_hex /;
 use Data::Dumper;
+use Redis::Fast;
+use JSON::XS;
 
 sub config {
   my ($self) = @_;
@@ -15,6 +17,16 @@ sub config {
     ip_ban_threshold => $ENV{'ISU4_IP_BAN_THRESHOLD'} || 10
   };
 };
+
+sub json_driver {
+    my ($self) = @_;
+    $self->{_json_driver} ||= JSON::XS->new;
+}
+
+sub redis {
+    my ($self) = @_;
+    $self->{_redis} ||= Redis::Fast->new;
+}
 
 sub db {
   my ($self) = @_;
@@ -44,20 +56,14 @@ sub calculate_password_hash {
 
 sub user_locked {
   my ($self, $user) = @_;
-  my $log = $self->db->select_row(
-    'SELECT COUNT(1) AS failures FROM login_log WHERE user_id = ? AND id > IFNULL((select id from login_log where user_id = ? AND succeeded = 1 ORDER BY id DESC LIMIT 1), 0)',
-    $user->{'id'}, $user->{'id'});
-
-  $self->config->{user_lock_threshold} <= $log->{failures};
+  my $cnt = $self->redis->hget("login:user_id:succfail", $user->{id}) || 0;
+  return $self->config->{user_lock_threshold} <= $cnt;
 };
 
 sub ip_banned {
   my ($self, $ip) = @_;
-  my $log = $self->db->select_row(
-    'SELECT COUNT(1) AS failures FROM login_log WHERE ip = ? AND id > IFNULL((select id from login_log where ip = ? AND succeeded = 1 ORDER BY id DESC LIMIT 1), 0)',
-    $ip, $ip);
-
-  $self->config->{ip_ban_threshold} <= $log->{failures};
+  my $cnt = $self->redis->hget("login:ip:succfail", $ip) || 0;
+  return $self->config->{ip_ban_threshold} <= $cnt;
 };
 
 sub attempt_login {
@@ -96,12 +102,10 @@ sub current_user {
 
 sub last_login {
   my ($self, $user_id) = @_;
-
-  my $logs = $self->db->select_all(
-   'SELECT * FROM login_log WHERE succeeded = 1 AND user_id = ? ORDER BY id DESC LIMIT 2',
-   $user_id);
-
-  @$logs[-1];
+  my $slk = sprintf "login:user_id:%d", $user_id;
+  my @rows = $self->redis->lrange($slk, 0, 1);
+  my $user = $self->json_driver->decode($rows[-1]);
+  return $user;
 };
 
 sub banned_ips {
@@ -109,22 +113,13 @@ sub banned_ips {
   my @ips;
   my $threshold = $self->config->{ip_ban_threshold};
 
-  my $not_succeeded = $self->db->select_all('SELECT ip FROM (SELECT ip, MAX(succeeded) as max_succeeded, COUNT(1) as cnt FROM login_log GROUP BY ip) AS t0 WHERE t0.max_succeeded = 0 AND t0.cnt >= ?', $threshold);
-
-  foreach my $row (@$not_succeeded) {
-    push @ips, $row->{ip};
+  my %data = $self->redis->hgetall("login:ip:succfail");
+  while (my ($ip, $cnt) = each %data) {
+      if ($threshold <= $cnt) {
+          push @ips, $ip;
+      }
   }
-
-  my $last_succeeds = $self->db->select_all('SELECT ip, MAX(id) AS last_login_id FROM login_log WHERE succeeded = 1 GROUP by ip');
-
-  foreach my $row (@$last_succeeds) {
-    my $count = $self->db->select_one('SELECT COUNT(1) AS cnt FROM login_log WHERE ip = ? AND ? < id', $row->{ip}, $row->{last_login_id});
-    if ($threshold <= $count) {
-      push @ips, $row->{ip};
-    }
-  }
-
-  \@ips;
+  return [ sort @ips ];
 };
 
 sub locked_users {
@@ -132,30 +127,49 @@ sub locked_users {
   my @user_ids;
   my $threshold = $self->config->{user_lock_threshold};
 
-  my $not_succeeded = $self->db->select_all('SELECT user_id, login FROM (SELECT user_id, login, MAX(succeeded) as max_succeeded, COUNT(1) as cnt FROM login_log GROUP BY user_id) AS t0 WHERE t0.user_id IS NOT NULL AND t0.max_succeeded = 0 AND t0.cnt >= ?', $threshold);
-
-  foreach my $row (@$not_succeeded) {
-    push @user_ids, $row->{login};
+  my @tmp_user_id;
+  my %data = $self->redis->hgetall("login:user_id:succfail");
+  while (my ($user_id, $cnt) = each %data) {
+      if ($threshold <= $cnt) {
+          push @tmp_user_id, $user_id;
+      }
   }
-
-  my $last_succeeds = $self->db->select_all('SELECT user_id, login, MAX(id) AS last_login_id FROM login_log WHERE user_id IS NOT NULL AND succeeded = 1 GROUP BY user_id');
-
-  foreach my $row (@$last_succeeds) {
-    my $count = $self->db->select_one('SELECT COUNT(1) AS cnt FROM login_log WHERE user_id = ? AND ? < id', $row->{user_id}, $row->{last_login_id});
-    if ($threshold <= $count) {
-      push @user_ids, $row->{login};
-    }
+  my $lus = $self->db->select_all('SELECT login FROM users WHERE id IN(' . join(',', @tmp_user_id) . ')');
+  for my $r (@$lus) {
+      push @user_ids, $r->{login};
   }
-
-  \@user_ids;
+  return [ sort @user_ids ];
 };
 
 sub login_log {
   my ($self, $succeeded, $login, $ip, $user_id) = @_;
-  $self->db->query(
-    'INSERT INTO login_log (`created_at`, `user_id`, `login`, `ip`, `succeeded`) VALUES (NOW(),?,?,?,?)',
-    $user_id, $login, $ip, ($succeeded ? 1 : 0)
-  );
+  # ログインのip成否更新
+  if ($succeeded) {
+      $self->redis->hset("login:ip:succfail", $ip, 0);
+  } else {
+      $self->redis->hincrby("login:ip:succfail", $ip, 1);
+  }
+
+  # ログインのuser_id成否更新
+  if ($user_id) {
+      if ($succeeded) {
+          $self->redis->hset("login:user_id:succfail", $user_id, 0);
+      } else {
+        $self->redis->hincrby("login:user_id:succfail", $user_id, 1);
+      }
+  }
+
+  # loginの成功記録
+  if ($succeeded && $user_id) {
+      my $slk = sprintf "login:user_id:%d", $user_id;
+      $self->redis->lpush($slk, $self->json_driver->encode({
+          created_at => "2016-10-04 00:00:00", # dummy
+          user_id => $user_id,
+          login => $login,
+          ip => $ip,
+          succeeded => $succeeded,
+      }));
+  }
 };
 
 sub set_flash {

@@ -11,3 +11,7 @@ mysql -h ${myhost} -P ${myport} -u ${myuser} -e "DROP DATABASE IF EXISTS ${mydb}
 mysql -h ${myhost} -P ${myport} -u ${myuser} ${mydb} < sql/schema.sql
 mysql -h ${myhost} -P ${myport} -u ${myuser} ${mydb} < sql/dummy_users.sql
 mysql -h ${myhost} -P ${myport} -u ${myuser} ${mydb} < sql/dummy_log.sql
+
+# redis init
+mysql -h ${myhost} -P ${myport} -u ${myuser} ${mydb} -e 'SELECT id,created_at,user_id,login,ip,succeeded FROM login_log ORDER BY id' | ./env.sh /home/isucon/webapp/perl/script/redisinit.sh
+
