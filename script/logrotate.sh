@@ -2,7 +2,11 @@
 set -ex
 
 # nginx
-mv /var/log/nginx/isucon.access_log.tsv /var/log/nginx/isucon.access_log.tsv.1
+if [ -e /var/log/nginx/isucon.access_log.tsv ]; then
+  mv /var/log/nginx/isucon.access_log.tsv /var/log/nginx/isucon.access_log.tsv.1
+fi
 
 # mysql
-mv /var/lib/mysql/mysqld-slow.log /var/lib/mysql/mysqld-slow.log.1
+if [ -e /var/lib/mysql/mysqld-slow.log ]; then
+  mv /var/lib/mysql/mysqld-slow.log /var/lib/mysql/mysqld-slow.log.1
+fi
