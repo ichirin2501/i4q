@@ -25,7 +25,7 @@ sub json_driver {
 
 sub redis {
     my ($self) = @_;
-    $self->{_redis} ||= Redis::Fast->new( sock => '/tmp/redis.sock' );
+    $self->{_redis} ||= Redis::Fast->new;
 }
 
 sub db {
