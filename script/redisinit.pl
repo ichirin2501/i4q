@@ -6,7 +6,7 @@ use Redis::Fast;
 use JSON::XS;
 
 my $jd    = JSON::XS->new;
-my $redis = Redis::Fast->new;
+my $redis = Redis::Fast->new( sock => '/tmp/redis.sock' );
 
 my $header = <>; # header
 
