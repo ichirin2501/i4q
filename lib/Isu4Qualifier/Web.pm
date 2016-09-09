@@ -235,11 +235,10 @@ get '/mypage' => [qw(session)] => sub {
   my ($self, $c) = @_;
   # loginに成功しないとpsgix.sessionにuser_idが入らない、ので、current_userのチェックは不要
   my $user_id = $c->req->env->{'psgix.session'}->{user_id} || 0;
-  my $last_login_user = $self->last_login($user_id);
-  #my $user = $self->current_user($user_id);
   my $msg;
 
-  if ($last_login_user) {
+  if ($user_id) {
+    my $last_login_user = $self->last_login($user_id);
     $c->render('mypage.tx', { last_login => $last_login_user });
   }
   else {
